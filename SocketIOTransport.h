@@ -34,6 +34,7 @@
 @property (nonatomic, readonly) NSString *sid;
 @property (nonatomic, readonly) NSTimeInterval heartbeatTimeout;
 @property (nonatomic) BOOL useSecure;
+@property (nonatomic) NSArray * pinnedCertificates;
 
 @end
 

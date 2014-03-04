@@ -81,7 +81,8 @@ NSString* const SocketIOException = @"SocketIOException";
             useSecure = _useSecure, 
             delegate = _delegate,
             heartbeatTimeout = _heartbeatTimeout,
-            returnAllDataFromAck = _returnAllDataFromAck;
+            returnAllDataFromAck = _returnAllDataFromAck,
+            pinnedCertificates = _pinnedCertificates;
 
 - (id) initWithDelegate:(id<SocketIODelegate>)delegate
 {
@@ -92,6 +93,7 @@ NSString* const SocketIOException = @"SocketIOException";
         _ackCount = 0;
         _acks = [[NSMutableDictionary alloc] init];
         _returnAllDataFromAck = NO;
+        _pinnedCertificates = nil;
     }
     return self;
 }
@@ -746,6 +748,7 @@ NSString* const SocketIOException = @"SocketIOException";
             xhrTransportClass = NSClassFromString(@"SocketIOTransportXHR");
         }
         
+                
         if (webSocketTransportClass != nil && [transports indexOfObject:@"websocket"] != NSNotFound) {
             DEBUGLOG(@"websocket supported -> using it now");
             _transport = [[webSocketTransportClass alloc] initWithDelegate:self];
@@ -785,31 +788,45 @@ NSString* const SocketIOException = @"SocketIOException";
     [_transport open];
 }
 
-#if DEBUG_CERTIFICATE
 
-// to deal with self-signed certificates
-- (BOOL) connection:(NSURLConnection *)connection
-canAuthenticateAgainstProtectionSpace:(NSURLProtectionSpace *)protectionSpace
+-(void)connection:(NSURLConnection *)connection willSendRequestForAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
 {
-    return [protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust];
-}
-
-- (void) connection:(NSURLConnection *)connection
-didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
-{
-    if ([challenge.protectionSpace.authenticationMethod
-         isEqualToString:NSURLAuthenticationMethodServerTrust]) {
-        // we only trust our own domain
-        if ([challenge.protectionSpace.host isEqualToString:_host]) {
-            SecTrustRef trust = challenge.protectionSpace.serverTrust;
-            NSURLCredential *credential = [NSURLCredential credentialForTrust:trust];
-            [challenge.sender useCredential:credential forAuthenticationChallenge:challenge];
+    NSURLProtectionSpace * protectionSpace = challenge.protectionSpace;
+    
+    if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
+    {
+        SecTrustResultType trustResult;
+        
+        // if there are pinned certificates, use them
+        if ((nil != _pinnedCertificates) && ([_pinnedCertificates count] > 0))
+        {
+            DEBUGLOG(@"Using pinned certificates to validate server");
+            
+            // pin the specified certificates to use for evaluating the server trust
+            SecTrustSetAnchorCertificates(protectionSpace.serverTrust, (__bridge CFArrayRef)_pinnedCertificates);
+        }
+        
+        // Eval the cert using default settings
+        SecTrustEvaluate(protectionSpace.serverTrust, &trustResult);
+        
+        // if certificate was accepted, use it
+        if (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed)
+        {
+            DEBUGLOG(@"Server Certificate accepted");
+            [challenge.sender useCredential:[NSURLCredential credentialForTrust:protectionSpace.serverTrust] forAuthenticationChallenge:challenge];
+        }
+        // otherwise abort
+        else
+        {
+            DEBUGLOG(@"Server Certificate invalid");
+            [challenge.sender cancelAuthenticationChallenge:challenge];
         }
     }
-    
-    [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+    else
+    {
+        [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+    }
 }
-#endif
 
 
 # pragma mark -

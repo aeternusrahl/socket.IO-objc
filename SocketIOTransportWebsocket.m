@@ -68,10 +68,18 @@ static NSString* kSecureSocketPortURL = @"wss://%@:%d/socket.io/1/websocket/%@";
         urlStr = [NSString stringWithFormat:format, delegate.host, delegate.sid];
     }
     NSURL *url = [NSURL URLWithString:urlStr];
+
+    // prepare a request and specify the pinned certificates to SocketRocket
+    NSMutableURLRequest * urlRequest = [NSMutableURLRequest requestWithURL:url];
+    NSArray * pinnedCertificates = [delegate pinnedCertificates];
+    if (nil != pinnedCertificates && [pinnedCertificates count] > 0)
+    {
+        urlRequest.SR_SSLPinnedCertificates = [delegate pinnedCertificates];
+    }
     
     _webSocket = nil;
     
-    _webSocket = [[SRWebSocket alloc] initWithURL:url];
+    _webSocket = [[SRWebSocket alloc] initWithURLRequest:urlRequest];
     _webSocket.delegate = self;
     DEBUGLOG(@"Opening %@", url);
     [_webSocket open];

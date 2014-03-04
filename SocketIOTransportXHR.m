@@ -261,4 +261,46 @@ static NSString* kSecureXHRPortURL = @"https://%@:%d/socket.io/1/xhr-polling/%@"
 }
 
 
+
+-(void)connection:(NSURLConnection *)connection willSendRequestForAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge
+{
+    NSURLProtectionSpace * protectionSpace = challenge.protectionSpace;
+    
+    if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
+    {
+        SecTrustResultType trustResult;
+        
+        // if there are pinned certificates, use them
+        NSArray * pinnedCertificates = [delegate pinnedCertificates];
+        if ((nil != pinnedCertificates) && ([pinnedCertificates count] > 0))
+        {
+            DEBUGLOG(@"Using pinned certificates to validate server");
+            
+            // pin the specified certificates to use for evaluating the server trust
+            SecTrustSetAnchorCertificates(protectionSpace.serverTrust, (__bridge CFArrayRef)pinnedCertificates);
+        }
+        
+        // Eval the cert using default settings
+        SecTrustEvaluate(protectionSpace.serverTrust, &trustResult);
+        
+        // if certificate was accepted, use it
+        if (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed)
+        {
+            DEBUGLOG(@"Server Certificate accepted");
+            [challenge.sender useCredential:[NSURLCredential credentialForTrust:protectionSpace.serverTrust] forAuthenticationChallenge:challenge];
+        }
+        // otherwise abort
+        else
+        {
+            DEBUGLOG(@"Server Certificate invalid");
+            [challenge.sender cancelAuthenticationChallenge:challenge];
+        }
+    }
+    else
+    {
+        [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+    }
+}
+
+
 @end
