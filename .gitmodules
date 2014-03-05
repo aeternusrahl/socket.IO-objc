@@ -1,3 +1,4 @@
 [submodule "submodules/socket-rocket"]
 	path = submodules/socket-rocket
-	url = https://github.com/square/SocketRocket.git
+	url = https://github.com/aeternusrahl/SocketRocket.git
+
