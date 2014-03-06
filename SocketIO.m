@@ -29,8 +29,8 @@
 #define DEBUG_LOGS 1
 #define DEBUG_CERTIFICATE 1
 #else
-#define DEBUG_LOGS 0
-#define DEBUG_CERTIFICATE 0
+#define DEBUG_LOGS 1
+#define DEBUG_CERTIFICATE 1
 #endif
 
 #if DEBUG_LOGS
@@ -82,7 +82,9 @@ NSString* const SocketIOException = @"SocketIOException";
             delegate = _delegate,
             heartbeatTimeout = _heartbeatTimeout,
             returnAllDataFromAck = _returnAllDataFromAck,
-            pinnedCertificates = _pinnedCertificates;
+            pinnedCertificates = _pinnedCertificates,
+            clientIdentity = _clientIdentity,
+            clientCertificates = _clientCertificates;
 
 - (id) initWithDelegate:(id<SocketIODelegate>)delegate
 {
@@ -94,6 +96,8 @@ NSString* const SocketIOException = @"SocketIOException";
         _acks = [[NSMutableDictionary alloc] init];
         _returnAllDataFromAck = NO;
         _pinnedCertificates = nil;
+        _clientCertificates = nil;
+        _clientIdentity = nil;
     }
     return self;
 }
@@ -793,38 +797,63 @@ NSString* const SocketIOException = @"SocketIOException";
 {
     NSURLProtectionSpace * protectionSpace = challenge.protectionSpace;
     
-    if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
+    // if previously failed the handshake, just abort now
+    if ([challenge previousFailureCount] > 0)
     {
-        SecTrustResultType trustResult;
-        
-        // if there are pinned certificates, use them
-        if ((nil != _pinnedCertificates) && ([_pinnedCertificates count] > 0))
-        {
-            DEBUGLOG(@"Using pinned certificates to validate server");
-            
-            // pin the specified certificates to use for evaluating the server trust
-            SecTrustSetAnchorCertificates(protectionSpace.serverTrust, (__bridge CFArrayRef)_pinnedCertificates);
-        }
-        
-        // Eval the cert using default settings
-        SecTrustEvaluate(protectionSpace.serverTrust, &trustResult);
-        
-        // if certificate was accepted, use it
-        if (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed)
-        {
-            DEBUGLOG(@"Server Certificate accepted");
-            [challenge.sender useCredential:[NSURLCredential credentialForTrust:protectionSpace.serverTrust] forAuthenticationChallenge:challenge];
-        }
-        // otherwise abort
-        else
-        {
-            DEBUGLOG(@"Server Certificate invalid");
-            [challenge.sender cancelAuthenticationChallenge:challenge];
-        }
+        DEBUGLOG(@"Canceling handshake due to previous failures");
+        [challenge.sender cancelAuthenticationChallenge:challenge];
     }
     else
     {
-        [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+        if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
+        {
+            SecTrustResultType trustResult;
+            
+            // if there are pinned certificates, use them
+            if ((nil != _pinnedCertificates) && ([_pinnedCertificates count] > 0))
+            {
+                DEBUGLOG(@"Using pinned certificates to validate server");
+                
+                // pin the specified certificates to use for evaluating the server trust
+                SecTrustSetAnchorCertificates(protectionSpace.serverTrust, (__bridge CFArrayRef)_pinnedCertificates);
+            }
+            
+            // Eval the cert using default settings
+            SecTrustEvaluate(protectionSpace.serverTrust, &trustResult);
+            
+            // if certificate was accepted, use it
+            if (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed)
+            {
+                DEBUGLOG(@"Server Certificate accepted");
+                [challenge.sender useCredential:[NSURLCredential credentialForTrust:protectionSpace.serverTrust] forAuthenticationChallenge:challenge];
+            }
+            // otherwise abort
+            else
+            {
+                DEBUGLOG(@"Server Certificate invalid");
+                [challenge.sender cancelAuthenticationChallenge:challenge];
+            }
+        }
+        else if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodClientCertificate])
+        {
+            // if client certificates have been specified
+            if ((nil != _clientIdentity) && (nil != _clientCertificates) && ([_clientCertificates count] > 0))
+            {
+                DEBUGLOG(@"Sending client identity and certificates to server");
+                NSURLCredential * credential = [NSURLCredential credentialWithIdentity:(__bridge SecIdentityRef)_clientIdentity certificates:_clientCertificates persistence:NSURLCredentialPersistencePermanent];
+                [challenge.sender useCredential:credential forAuthenticationChallenge:challenge];
+            }
+            else
+            {
+                // dont send any credentials because none specified
+                DEBUGLOG(@"Unable to perform client authentication because credentials not specified");
+                [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+            }
+        }
+        else
+        {
+            [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+        }
     }
 }
 
@@ -850,6 +879,8 @@ NSString* const SocketIOException = @"SocketIOException";
     
     _queue = nil;
     _acks = nil;
+    _clientIdentity = nil;
+    _clientCertificates = nil;
 }
 
 

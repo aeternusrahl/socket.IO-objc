@@ -86,7 +86,14 @@ typedef enum {
     // http request
     NSMutableData *_httpRequestData;
     
+    // array of SecCertificateRef certificates used to validate server certificate
     NSArray * _pinnedCertificates;
+    
+    // SecIdentityRef for client auth
+    id _clientIdentity;
+    
+    // array of certificates used for client auth.
+    NSArray * _clientCertificates;
     
     // get all arguments from ack? (https://github.com/pkyeck/socket.IO-objc/pull/85)
     BOOL _returnAllDataFromAck;
@@ -101,6 +108,8 @@ typedef enum {
 @property (nonatomic, weak) id<SocketIODelegate> delegate;
 @property (nonatomic) BOOL returnAllDataFromAck;
 @property (nonatomic) NSArray * pinnedCertificates;
+@property (nonatomic) id clientIdentity;
+@property (nonatomic) NSArray * clientCertificates;
 
 - (id) initWithDelegate:(id<SocketIODelegate>)delegate;
 - (void) connectToHost:(NSString *)host onPort:(NSInteger)port;

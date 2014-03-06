@@ -266,39 +266,67 @@ static NSString* kSecureXHRPortURL = @"https://%@:%d/socket.io/1/xhr-polling/%@"
 {
     NSURLProtectionSpace * protectionSpace = challenge.protectionSpace;
     
-    if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
+    // if previously failed the handshake, just abort now
+    if ([challenge previousFailureCount] > 0)
     {
-        SecTrustResultType trustResult;
-        
-        // if there are pinned certificates, use them
-        NSArray * pinnedCertificates = [delegate pinnedCertificates];
-        if ((nil != pinnedCertificates) && ([pinnedCertificates count] > 0))
-        {
-            DEBUGLOG(@"Using pinned certificates to validate server");
-            
-            // pin the specified certificates to use for evaluating the server trust
-            SecTrustSetAnchorCertificates(protectionSpace.serverTrust, (__bridge CFArrayRef)pinnedCertificates);
-        }
-        
-        // Eval the cert using default settings
-        SecTrustEvaluate(protectionSpace.serverTrust, &trustResult);
-        
-        // if certificate was accepted, use it
-        if (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed)
-        {
-            DEBUGLOG(@"Server Certificate accepted");
-            [challenge.sender useCredential:[NSURLCredential credentialForTrust:protectionSpace.serverTrust] forAuthenticationChallenge:challenge];
-        }
-        // otherwise abort
-        else
-        {
-            DEBUGLOG(@"Server Certificate invalid");
-            [challenge.sender cancelAuthenticationChallenge:challenge];
-        }
+        DEBUGLOG(@"Canceling handshake due to previous failures");
+        [challenge.sender cancelAuthenticationChallenge:challenge];
     }
     else
     {
-        [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+        if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust])
+        {
+            SecTrustResultType trustResult;
+            NSArray * pinnedCertificates = [delegate pinnedCertificates];
+            
+            // if there are pinned certificates, use them
+            if ((nil != pinnedCertificates) && ([pinnedCertificates count] > 0))
+            {
+                DEBUGLOG(@"Using pinned certificates to validate server");
+                
+                // pin the specified certificates to use for evaluating the server trust
+                SecTrustSetAnchorCertificates(protectionSpace.serverTrust, (__bridge CFArrayRef)pinnedCertificates);
+            }
+            
+            // Eval the cert using default settings
+            SecTrustEvaluate(protectionSpace.serverTrust, &trustResult);
+            
+            // if certificate was accepted, use it
+            if (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed)
+            {
+                DEBUGLOG(@"Server Certificate accepted");
+                [challenge.sender useCredential:[NSURLCredential credentialForTrust:protectionSpace.serverTrust] forAuthenticationChallenge:challenge];
+            }
+            // otherwise abort
+            else
+            {
+                DEBUGLOG(@"Server Certificate invalid");
+                [challenge.sender cancelAuthenticationChallenge:challenge];
+            }
+        }
+        else if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodClientCertificate])
+        {
+            id clientIdentity = [delegate clientIdentity];
+            NSArray * clientCertificates = [delegate clientCertificates];
+            
+            // if client certificates have been specified
+            if ((nil != clientIdentity) && (nil != clientCertificates) && ([clientCertificates count] > 0))
+            {
+                DEBUGLOG(@"Sending client identity and certificates to server");
+                NSURLCredential * credential = [NSURLCredential credentialWithIdentity:(__bridge SecIdentityRef)(clientIdentity) certificates:clientCertificates persistence:NSURLCredentialPersistencePermanent];
+                [challenge.sender useCredential:credential forAuthenticationChallenge:challenge];
+            }
+            else
+            {
+                // dont send any credentials because none specified
+                DEBUGLOG(@"Unable to perform client authentication because credentials not specified");
+                [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+            }
+        }
+        else
+        {
+            [challenge.sender continueWithoutCredentialForAuthenticationChallenge:challenge];
+        }
     }
 }
 

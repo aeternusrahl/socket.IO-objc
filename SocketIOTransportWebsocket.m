@@ -71,10 +71,24 @@ static NSString* kSecureSocketPortURL = @"wss://%@:%d/socket.io/1/websocket/%@";
 
     // prepare a request and specify the pinned certificates to SocketRocket
     NSMutableURLRequest * urlRequest = [NSMutableURLRequest requestWithURL:url];
+    
+    // if there are pinned certificates for server verification
     NSArray * pinnedCertificates = [delegate pinnedCertificates];
     if (nil != pinnedCertificates && [pinnedCertificates count] > 0)
     {
         urlRequest.SR_SSLPinnedCertificates = [delegate pinnedCertificates];
+    }
+    
+    // if there are client credentials specified
+    NSArray * clientCertificates = [delegate clientCertificates];
+    id clientIdentity = [delegate clientIdentity];
+    if (clientIdentity != nil && clientCertificates != nil && [clientCertificates count] > 0)
+    {
+        // create a new array to pass to socketrocket where the first element is the identity followed by the client certificates
+        NSMutableArray * clientCertArray = [NSMutableArray arrayWithObject:clientIdentity];
+        [clientCertArray addObjectsFromArray:clientCertificates];
+        
+        urlRequest.SR_SSLClientCertificates = clientCertArray;
     }
     
     _webSocket = nil;
