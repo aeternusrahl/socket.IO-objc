@@ -310,7 +310,7 @@ static NSString* kSecureXHRPortURL = @"https://%@:%d/socket.io/1/xhr-polling/%@"
             NSArray * clientCertificates = [delegate clientCertificates];
             
             // if client certificates have been specified
-            if ((nil != clientIdentity) && (nil != clientCertificates) && ([clientCertificates count] > 0))
+            if (nil != clientIdentity)
             {
                 DEBUGLOG(@"Sending client identity and certificates to server");
                 NSURLCredential * credential = [NSURLCredential credentialWithIdentity:(__bridge SecIdentityRef)(clientIdentity) certificates:clientCertificates persistence:NSURLCredentialPersistencePermanent];

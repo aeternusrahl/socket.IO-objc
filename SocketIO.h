@@ -92,7 +92,7 @@ typedef enum {
     // SecIdentityRef for client auth
     id _clientIdentity;
     
-    // array of certificates used for client auth.
+    // array of certificates used for client auth (in addition to any that are part of the specified identity)
     NSArray * _clientCertificates;
     
     // get all arguments from ack? (https://github.com/pkyeck/socket.IO-objc/pull/85)

@@ -837,7 +837,7 @@ NSString* const SocketIOException = @"SocketIOException";
         else if ([protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodClientCertificate])
         {
             // if client certificates have been specified
-            if ((nil != _clientIdentity) && (nil != _clientCertificates) && ([_clientCertificates count] > 0))
+            if (nil != _clientIdentity)
             {
                 DEBUGLOG(@"Sending client identity and certificates to server");
                 NSURLCredential * credential = [NSURLCredential credentialWithIdentity:(__bridge SecIdentityRef)_clientIdentity certificates:_clientCertificates persistence:NSURLCredentialPersistencePermanent];

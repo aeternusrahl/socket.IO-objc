@@ -82,11 +82,16 @@ static NSString* kSecureSocketPortURL = @"wss://%@:%d/socket.io/1/websocket/%@";
     // if there are client credentials specified
     NSArray * clientCertificates = [delegate clientCertificates];
     id clientIdentity = [delegate clientIdentity];
-    if (clientIdentity != nil && clientCertificates != nil && [clientCertificates count] > 0)
+    if (clientIdentity != nil)
     {
         // create a new array to pass to socketrocket where the first element is the identity followed by the client certificates
         NSMutableArray * clientCertArray = [NSMutableArray arrayWithObject:clientIdentity];
-        [clientCertArray addObjectsFromArray:clientCertificates];
+        
+        // if there are extra client certificates, append them to the array
+        if ((clientCertificates != nil) && ([clientCertificates count] > 0))
+        {
+            [clientCertArray addObjectsFromArray:clientCertificates];
+        }
         
         urlRequest.SR_SSLClientCertificates = clientCertArray;
     }
